@@ -1,0 +1,6 @@
+{
+  "name": "Goal Strike Simulator",
+  "description": "An arcade-style 3D football game featuring a Magnus curve physics engine, cinematic slow-mo replays, collapsible adaptive HUD, interactive targets, and dynamic camera angles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Goal Strike Simulator - 3D Magnus Curve Free Kick</title>
+    <meta name="description" content="Arcade 3D football game featuring a Magnus curve physics engine, cinematic slow-mo replays, ball spin bending, interactive neon targets, goalkeeper AI, and customizable HUD views.">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GSAP Animation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #060913;
+            color: #ffffff;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .font-display {
+            font-family: 'Teko', sans-serif;
+            letter-spacing: 0.04em;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: rgba(10, 17, 34, 0.84);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-panel-accent {
+            background: rgba(16, 185, 129, 0.15);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        /* Custom Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 22px;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #22c55e;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.9);
+            border: 2px solid #ffffff;
+            transition: transform 0.1s ease, background-color 0.2s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #4ade80;
+        }
+
+        /* Glow Effects */
+        .glow-text-green {
+            text-shadow: 0 0 14px rgba(34, 197, 94, 0.75);
+        }
+
+        .glow-text-gold {
+            text-shadow: 0 0 14px rgba(234, 179, 8, 0.85);
+        }
+
+        .glow-box-green {
+            box-shadow: 0 0 25px rgba(34, 197, 94, 0.4);
+        }
+
+        .glow-box-red {
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.4);
+        }
+
+        .glow-box-cyan {
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.4);
+        }
+
+        /* Target Banner Animations */
+        @keyframes popIn {
+            0% { transform: scale(0.6) translateY(24px); opacity: 0; }
+            70% { transform: scale(1.08) translateY(-4px); opacity: 1; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .animate-pop {
+            animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* TV Broadcast Scanlines / Rec Indicator */
+        .rec-dot {
+            animation: blink 1s infinite alternate;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+
+        /* Swipe visual overlay line */
+        #gesture-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Collapsible panel smooth animation */
+        #collapsible-controls {
+            transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, transform 0.35s ease;
+            transform-origin: bottom center;
+        }
+
+        #collapsible-controls.collapsed {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            transform: scaleY(0.9) translateY(12px) !important;
+            pointer-events: none !important;
+            margin: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950">
+
+    <!-- Three.js 3D WebGL Canvas Layer -->
+    <div id="canvas-container"></div>
+
+    <!-- Interactive Gesture Guidance / Swipe Canvas Overlay -->
+    <svg id="gesture-svg">
+        <defs>
+            <linearGradient id="swipeGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%" stop-color="#22c55e" stop-opacity="0.9" />
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="1" />
+            </linearGradient>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        </defs>
+        <path id="gesture-path" d="" fill="none" stroke="url(#swipeGrad)" stroke-width="5" stroke-linecap="round" filter="url(#glow)" stroke-dasharray="8 6" />
+        <circle id="gesture-start" cx="-100" cy="-100" r="10" fill="#22c55e" filter="url(#glow)" />
+        <circle id="gesture-end" cx="-100" cy="-100" r="12" fill="#38bdf8" filter="url(#glow)" />
+    </svg>
+
+    <!-- TV Broadcast Slow-Mo Replay Overlay Badge (Triggered on goals) -->
+    <div id="replay-badge" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-auto hidden animate-pop">
+        <div class="glass-panel px-5 py-2.5 rounded-2xl border border-rose-500/50 shadow-2xl flex items-center gap-3.5 bg-black/85">
+            <div class="w-3.5 h-3.5 rounded-full bg-rose-500 rec-dot shadow-lg shadow-rose-500/80"></div>
+            <div class="text-left">
+                <div class="flex items-center gap-2">
+                    <span class="font-display text-xl sm:text-2xl font-bold tracking-widest text-white leading-none">SLOW-MO REPLAY</span>
+                    <span class="text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/40 px-1.5 py-0.5 rounded font-mono font-bold">0.32x</span>
+                </div>
+                <p id="replay-telemetry" class="text-[10px] text-gray-300 font-semibold tracking-wider">Cinematic Trajectory Tracking</p>
+            </div>
+            <button id="btn-skip-replay" class="ml-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-gray-200 hover:text-white transition active:scale-95 cursor-pointer">
+                Skip <span class="hidden sm:inline text-gray-400 font-mono text-[10px]">[ESC]</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main HUD UI Overlay Layer -->
+    <div class="relative z-20 pointer-events-none flex flex-col justify-between h-full p-3 sm:p-4 md:p-6 select-none">
+        
+        <!-- Top Stats Bar -->
+        <header class="flex flex-wrap items-center justify-between gap-2 sm:gap-4 max-w-6xl mx-auto w-full">
+            
+            <!-- Brand / Title -->
+            <div id="brand-panel" class="glass-panel px-3.5 py-2 rounded-2xl flex items-center gap-3 pointer-events-auto shadow-2xl border-emerald-500/30">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-green-500 to-lime-400 flex items-center justify-center text-white text-xl font-black shadow-lg shadow-emerald-600/40">
+                    <i class="fa-solid fa-futbol animate-spin" style="animation-duration: 12s;"></i>
+                </div>
+                <div>
+                    <h1 class="font-display text-2xl md:text-3xl font-bold leading-none tracking-wider text-white">
+                        GOAL STRIKE <span class="text-green-400 font-extrabold">SIMULATOR</span>
+                    </h1>
+                    <p class="text-[10px] text-gray-300 font-bold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 3D Magnus Curve Engine
+                    </p>
+                </div>
+            </div>
+
+            <!-- Scoreboard Metrics -->
+            <div id="scoreboard-panel" class="glass-panel px-4 sm:px-6 py-2 rounded-2xl flex items-center gap-4 sm:gap-6 pointer-events-auto shadow-2xl">
+                <div class="text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Score</span>
+                    <span id="ui-score" class="font-display text-2xl sm:text-3xl font-bold text-yellow-400 leading-none glow-text-gold">0</span>
+                </div>
+                <div class="h-7 w-[1px] bg-white/15"></div>
+                <div class="text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Shots</span>
+                    <span id="ui-shots" class="font-display text-2xl sm:text-3xl font-bold text-white leading-none">0/10</span>
+                </div>
+                <div class="h-7 w-[1px] bg-white/15"></div>
+                <div class="text-center">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Streak</span>
+                    <span id="ui-streak" class="font-display text-2xl sm:text-3xl font-bold text-green-400 leading-none glow-text-green">0</span>
+                </div>
+                <div class="h-7 w-[1px] bg-white/15 hidden sm:block"></div>
+                <div class="text-center hidden sm:block">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">Accuracy</span>
+                    <span id="ui-accuracy" class="font-display text-2xl sm:text-3xl font-bold text-cyan-400 leading-none">0%</span>
+                </div>
+            </div>
+
+            <!-- Top Action Controls: Camera Mode, Audio Toggle, Manual Replay & Help -->
+            <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+                <button id="btn-cam-toggle" title="Toggle Camera View" class="glass-panel h-10 sm:h-11 px-3 rounded-2xl flex items-center gap-2 text-gray-200 hover:text-white hover:bg-white/15 transition active:scale-95 shadow-xl cursor-pointer">
+                    <i class="fa-solid fa-camera text-sm sm:text-base text-emerald-400"></i>
+                    <span id="cam-name" class="text-xs font-semibold hidden md:inline">Behind Ball</span>
+                </button>
+                <button id="btn-manual-replay" title="Replay Last Shot in Slow-Mo" class="glass-panel w-10 sm:w-11 h-10 sm:h-11 rounded-2xl flex items-center justify-center text-gray-200 hover:text-white hover:bg-white/15 transition active:scale-95 shadow-xl cursor-pointer">
+                    <i class="fa-solid fa-film text-sm sm:text-base text-rose-400"></i>
+                </button>
+                <button id="btn-audio-toggle" title="Mute/Unmute Sound FX" class="glass-panel w-10 sm:w-11 h-10 sm:h-11 rounded-2xl flex items-center justify-center text-gray-200 hover:text-white hover:bg-white/15 transition active:scale-95 shadow-xl cursor-pointer">
+                    <i id="audio-icon" class="fa-solid fa-volume-high text-sm sm:text-base text-green-400"></i>
+                </button>
+                <button id="btn-help-toggle" title="How to Play" class="glass-panel w-10 sm:w-11 h-10 sm:h-11 rounded-2xl flex items-center justify-center text-gray-200 hover:text-white hover:bg-white/15 transition active:scale-95 shadow-xl cursor-pointer">
+                    <i class="fa-solid fa-circle-question text-sm sm:text-base text-cyan-400"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Center Notification Overlay (Goals, Misses, Post clangs, Target hits) -->
+        <div id="notification-banner" class="self-center my-auto pointer-events-none hidden text-center z-30">
+            <div id="banner-card" class="glass-panel px-7 sm:px-10 py-4 sm:py-5 rounded-3xl border border-green-500/50 glow-box-green animate-pop">
+                <span id="banner-subtitle" class="text-xs sm:text-sm font-bold uppercase tracking-widest text-green-400 block mb-1">Top Corner Target Hit!</span>
+                <h2 id="banner-title" class="font-display text-5xl sm:text-7xl font-extrabold text-white tracking-wider">GOAL! +100</h2>
+                <p id="banner-detail" class="text-xs sm:text-sm text-gray-200 font-medium mt-1">112 km/h • 24.5 m Bend</p>
+            </div>
+        </div>
+
+        <!-- Touch/Swipe Hint Pill (Centered above dashboard) -->
+        <div id="swipe-hint" class="self-center pointer-events-auto bg-black/60 border border-white/15 backdrop-blur-md px-4 py-1.5 rounded-full text-[11px] text-gray-300 font-medium flex items-center gap-2 mb-1 shadow-lg">
+            <i class="fa-solid fa-hand-pointer text-emerald-400 animate-bounce"></i>
+            <span>Tip: Drag directly on the ball to swipe-flick, or toggle the full physics panel below!</span>
+            <button id="btn-dismiss-hint" class="text-gray-400 hover:text-white ml-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- Bottom Redesigned Adaptable Dashboard (Supports Minimal HUD vs Full Panel) -->
+        <footer id="bottom-dashboard" class="max-w-4xl mx-auto w-full pointer-events-auto flex flex-col gap-2">
+            
+            <!-- Compact Telemetry & Panel View Toggle Bar -->
+            <div class="glass-panel px-3 sm:px-4 py-2 rounded-2xl flex items-center justify-between gap-2 text-xs text-gray-300 shadow-xl">
+                <!-- Telemetry Metrics -->
+                <div class="flex items-center gap-3 sm:gap-5 overflow-x-auto no-scrollbar">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-gauge-high text-green-400 text-xs"></i>
+                        <span>Speed: <strong id="tele-speed" class="text-white font-bold">88 km/h</strong></span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-arrows-spin text-cyan-400 text-xs"></i>
+                        <span>Curve: <strong id="tele-curve" class="text-white font-bold">0 RPM</strong></span>
+                    </div>
+                    <div class="hidden xs:flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-crosshairs text-yellow-400 text-xs"></i>
+                        <span>xG: <strong id="tele-xg" class="text-white font-bold">0.42</strong></span>
+                    </div>
+                    <div class="hidden md:flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-ruler-horizontal text-purple-400 text-xs"></i>
+                        <span>Distance: <strong class="text-white font-bold">11.0 m</strong></span>
+                    </div>
+                </div>
+
+                <!-- Sleek Low-Profile Toggle Button (Full Controls vs Minimal HUD) -->
+                <button id="btn-panel-toggle" class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/10 hover:bg-emerald-500/20 border border-white/15 hover:border-emerald-500/40 text-gray-200 hover:text-emerald-300 transition text-xs font-semibold shrink-0 cursor-pointer shadow-sm active:scale-95" title="Switch between Full Panel and Minimal HUD">
+                    <i id="toggle-panel-icon" class="fa-solid fa-sliders text-emerald-400"></i>
+                    <span id="toggle-panel-text" class="hidden sm:inline">Minimal HUD</span>
+                </button>
+            </div>
+
+            <!-- Collapsible Sliders & Presets Section (Slides smoothly away in Minimal HUD mode) -->
+            <div id="collapsible-controls" class="glass-panel p-3.5 sm:p-5 rounded-3xl shadow-2xl flex flex-col gap-3 sm:gap-4 border-white/15 max-h-[500px] overflow-hidden">
+                
+                <!-- Quick Preset Shot Type Buttons -->
+                <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5 text-xs">
+                    <span class="text-gray-400 font-bold uppercase text-[10px] tracking-wider shrink-0 flex items-center gap-1">
+                        <i class="fa-solid fa-bolt text-yellow-400"></i> Presets:
+                    </span>
+                    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                        <button class="preset-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/50 text-gray-300 hover:text-green-300 transition font-medium text-xs whitespace-nowrap cursor-pointer" data-aim="16" data-power="78" data-curve="-24" data-lift="21">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1 text-emerald-400"></i> Top Right Curler
+                        </button>
+                        <button class="preset-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/50 text-gray-300 hover:text-green-300 transition font-medium text-xs whitespace-nowrap cursor-pointer" data-aim="-16" data-power="80" data-curve="24" data-lift="21">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1 text-cyan-400"></i> Top Left Curler
+                        </button>
+                        <button class="preset-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/50 text-gray-300 hover:text-green-300 transition font-medium text-xs whitespace-nowrap cursor-pointer" data-aim="0" data-power="98" data-curve="0" data-lift="26">
+                            <i class="fa-solid fa-fire mr-1 text-rose-400"></i> Power Rocket
+                        </button>
+                        <button class="preset-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/50 text-gray-300 hover:text-green-300 transition font-medium text-xs whitespace-nowrap cursor-pointer" data-aim="8" data-power="48" data-curve="-4" data-lift="36">
+                            <i class="fa-solid fa-feather mr-1 text-purple-400"></i> Panenka Chip
+                        </button>
+                        <button class="preset-btn px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/5 hover:bg-green-500/20 border border-white/10 hover:border-green-500/50 text-gray-300 hover:text-green-300 transition font-medium text-xs whitespace-nowrap cursor-pointer" data-aim="26" data-power="92" data-curve="-30" data-lift="16">
+                            <i class="fa-solid fa-tornado mr-1 text-yellow-400"></i> Banana Swerve
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sliders Grid (Aim, Power, Side Spin / Curve, Elevation / Lift) -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+                    <div class="bg-black/35 p-2.5 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <div class="flex justify-between items-center text-xs font-semibold">
+                            <span class="text-gray-300 text-[11px] sm:text-xs"><i class="fa-solid fa-compass text-green-400 mr-1"></i> Aim Angle</span>
+                            <span id="val-aim" class="text-green-400 font-bold font-mono">0°</span>
+                        </div>
+                        <input type="range" id="slider-aim" min="-32" max="32" value="0" step="1">
+                        <div class="flex justify-between text-[9px] text-gray-500 font-bold px-0.5">
+                            <span>LEFT</span>
+                            <span>CENTER</span>
+                            <span>RIGHT</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-black/35 p-2.5 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <div class="flex justify-between items-center text-xs font-semibold">
+                            <span class="text-gray-300 text-[11px] sm:text-xs"><i class="fa-solid fa-gauge text-red-400 mr-1"></i> Shot Power</span>
+                            <span id="val-power" class="text-red-400 font-bold font-mono">68%</span>
+                        </div>
+                        <input type="range" id="slider-power" min="30" max="100" value="68" step="1">
+                        <div class="flex justify-between text-[9px] text-gray-500 font-bold px-0.5">
+                            <span>SOFT</span>
+                            <span>MEDIUM</span>
+                            <span>MAX</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-black/35 p-2.5 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <div class="flex justify-between items-center text-xs font-semibold">
+                            <span class="text-gray-300 text-[11px] sm:text-xs"><i class="fa-solid fa-rotate-right text-cyan-400 mr-1"></i> Magnus Spin</span>
+                            <span id="val-curve" class="text-cyan-400 font-bold font-mono">0</span>
+                        </div>
+                        <input type="range" id="slider-curve" min="-30" max="30" value="0" step="1">
+                        <div class="flex justify-between text-[9px] text-gray-500 font-bold px-0.5">
+                            <span>BEND L</span>
+                            <span>STRAIGHT</span>
+                            <span>BEND R</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-black/35 p-2.5 rounded-2xl border border-white/5 flex flex-col gap-1">
+                        <div class="flex justify-between items-center text-xs font-semibold">
+                            <span class="text-gray-300 text-[11px] sm:text-xs"><i class="fa-solid fa-arrow-trend-up text-purple-400 mr-1"></i> Elevation</span>
+                            <span id="val-lift" class="text-purple-400 font-bold font-mono">18°</span>
+                        </div>
+                        <input type="range" id="slider-lift" min="6" max="40" value="18" step="1">
+                        <div class="flex justify-between text-[9px] text-gray-500 font-bold px-0.5">
+                            <span>LOW</span>
+                            <span>MID</span>
+                            <span>CHIP</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Compact Action Row: Always Accessible & Streamlined -->
+            <div class="flex items-center gap-2">
+                <button id="btn-shoot" class="flex-1 py-3 sm:py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-base sm:text-lg tracking-wider shadow-lg shadow-emerald-500/30 active:scale-[0.98] transition flex items-center justify-center gap-2.5 cursor-pointer">
+                    <i class="fa-solid fa-futbol text-lg sm:text-xl"></i> 
+                    <span>KICK BALL</span>
+                    <span class="text-[10px] bg-black/25 text-emerald-950 px-2 py-0.5 rounded-md font-mono font-bold hidden sm:inline">SPACE</span>
+                </button>
+                
+                <button id="btn-reset" class="py-3 sm:py-3.5 px-4 sm:px-5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold transition active:scale-95 flex items-center gap-1.5 cursor-pointer glass-panel" title="Reset Ball to Spot">
+                    <i class="fa-solid fa-rotate-left text-base"></i>
+                    <span class="text-xs hidden sm:inline">Reset</span>
+                </button>
+
+                <button id="btn-random" class="py-3 sm:py-3.5 px-4 rounded-2xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-300 font-bold transition active:scale-95 flex items-center gap-1.5 cursor-pointer" title="Surprise Random Shot Preset">
+                    <i class="fa-solid fa-dice text-base"></i>
+                </button>
+            </div>
+
+        </footer>
+
+    </div>
+
+    <!-- How To Play Modal -->
+    <div id="modal-help" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-lg w-full p-6 md:p-8 rounded-3xl border border-white/20 text-left flex flex-col gap-4 shadow-2xl animate-pop">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-gamepad"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-display text-2xl font-bold text-white">HOW TO PLAY</h2>
+                        <p class="text-[11px] text-gray-400">3D Magnus Physics, Replays & Custom Views</p>
+                    </div>
+                </div>
+                <button id="btn-close-help" class="text-gray-400 hover:text-white text-xl p-2 cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="space-y-2.5 text-xs text-gray-300">
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/5 flex gap-3 items-start">
+                    <div class="w-8 h-8 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                    </div>
+                    <div>
+                        <strong class="text-white block text-sm mb-0.5">1. Swipe / Flick or Sliders</strong>
+                        Flick up directly on the pitch or football to kick with natural gesture speed and angle, OR expand the full panel for precision calibration.
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/5 flex gap-3 items-start">
+                    <div class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-film"></i>
+                    </div>
+                    <div>
+                        <strong class="text-white block text-sm mb-0.5">2. Cinematic Slow-Mo Replay</strong>
+                        Every goal automatically triggers a dynamic slow-mo broadcast replay camera tracking the ball's final curling trajectory past the keeper into the net!
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/5 flex gap-3 items-start">
+                    <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <div>
+                        <strong class="text-white block text-sm mb-0.5">3. Minimal HUD vs Full Panel</strong>
+                        Tap the layout toggle on the bottom telemetry bar to collapse sliders into a sleek Minimal HUD, maximizing your 3D view for pure touch flicks!
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-white/5 border border-white/5 flex gap-3 items-start">
+                    <div class="w-8 h-8 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <i class="fa-solid fa-bullseye"></i>
+                    </div>
+                    <div>
+                        <strong class="text-white block text-sm mb-0.5">4. Neon Target Combos</strong>
+                        Aim for the spinning corner targets (100 pts) and upper 90 crossbar bin (150 pts). Shatter them for combo multipliers!
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-help-start" class="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm tracking-wider uppercase transition mt-1 cursor-pointer">
+                LET'S PLAY
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Summary Modal -->
+    <div id="modal-summary" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="glass-panel max-w-md w-full p-6 md:p-8 rounded-3xl border border-white/20 text-center flex flex-col gap-5 shadow-2xl animate-pop">
+            <div class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-yellow-500 via-amber-400 to-yellow-200 mx-auto flex items-center justify-center text-slate-950 text-4xl font-black shadow-xl glow-box-green">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <div>
+                <span class="text-xs uppercase font-extrabold text-emerald-400 tracking-widest block mb-1">Match Complete</span>
+                <h2 class="font-display text-4xl sm:text-5xl font-extrabold text-white leading-tight">FINAL SCORE REPORT</h2>
+                <p id="sum-rating" class="text-sm text-gray-300 font-semibold mt-1">World Class Striker! Incredible curve precision.</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 text-left">
+                <div class="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block">Total Score</span>
+                    <span id="sum-score" class="font-display text-3xl font-bold text-yellow-400 leading-none">0</span>
+                </div>
+                <div class="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block">Targets Shattered</span>
+                    <span id="sum-targets" class="font-display text-3xl font-bold text-emerald-400 leading-none">0</span>
+                </div>
+                <div class="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block">Goal Accuracy</span>
+                    <span id="sum-accuracy" class="font-display text-3xl font-bold text-cyan-400 leading-none">0%</span>
+                </div>
+                <div class="bg-white/5 p-3.5 rounded-2xl border border-white/10">
+                    <span class="text-[10px] uppercase font-bold text-gray-400 block">Max Streak</span>
+                    <span id="sum-streak" class="font-display text-3xl font-bold text-purple-400 leading-none">0</span>
+                </div>
+            </div>
+
+            <button id="btn-restart" class="py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-400 hover:from-emerald-400 hover:to-green-300 text-slate-950 font-black text-lg transition shadow-lg shadow-emerald-500/30 active:scale-[0.98] cursor-pointer">
+                PLAY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <!-- Complete Robust JavaScript Game Logic -->
+    <script>
+        /* =========================================================================
+           1. SYNTHETIC AUDIO ENGINE (Web Audio API - zero external sound files)
+           ========================================================================= */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.ctx = new AudioContext();
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playKick(powerPercent = 70) {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                const startFreq = 120 + (powerPercent / 100) * 80;
+                osc.frequency.setValueAtTime(startFreq, now);
+                osc.frequency.exponentialRampToValueAtTime(32, now + 0.16);
+
+                gain.gain.setValueAtTime(0.9, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.18);
+            }
+
+            playPostHit() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                [850, 1340, 2180].forEach((freq) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.7);
+                });
+            }
+
+            playTargetShatter() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                [1200, 1600, 2400, 3200].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+                    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.3);
+
+                    gain.gain.setValueAtTime(0.3, now + idx * 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now + idx * 0.04);
+                    osc.stop(now + 0.45);
+                });
+            }
+
+            playGoalCheer() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                const bufferSize = this.ctx.sampleRate * 1.8;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(700, now);
+                filter.frequency.linearRampToValueAtTime(1100, now + 0.5);
+                filter.frequency.linearRampToValueAtTime(600, now + 1.8);
+                filter.Q.value = 1.8;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.01, now);
+                gain.gain.linearRampToValueAtTime(0.45, now + 0.35);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.8);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start(now);
+                noise.stop(now + 1.8);
+            }
+
+            playGloveSave() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(170, now);
+                osc.frequency.linearRampToValueAtTime(50, now + 0.14);
+
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.16);
+            }
+
+            playWhistle() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc1.type = 'sine';
+                osc2.type = 'sine';
+                osc1.frequency.setValueAtTime(2150, now);
+                osc2.frequency.setValueAtTime(2520, now);
+
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.28, now + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.45);
+                osc2.stop(now + 0.45);
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        /* =========================================================================
+           2. THREE.JS 3D SCENE ARCHITECTURE & ASSET GENERATION
+           ========================================================================= */
+        let scene, camera, renderer;
+        let ball, ballShadowMesh;
+        let goalGroup, keeperGroup, netMesh;
+        let trajectoryLine;
+        let targetMarkers = [];
+        let particles = [];
+        let ballTrailParticles = [];
+
+        // Trajectory Frame Recorder for Cinematic Slow-Mo Replays
+        let recordedFlightFrames = [];
+        let isReplaying = false;
+        let replayFrameIndex = 0;
+        let replaySpeedScale = 0.32; // 0.32x cinematic slow-motion
+        let replayCamOffset = new THREE.Vector3(2.2, 1.2, 3.8); // Chase tracking angle
+
+        // Game State Variables
+        const GAME_STATE = {
+            IDLE: 0,
+            IN_FLIGHT: 1,
+            RESULT: 2,
+            REPLAY: 3
+        };
+
+        let currentState = GAME_STATE.IDLE;
+        let score = 0;
+        let shotsTaken = 0;
+        let streak = 0;
+        let targetsHitCount = 0;
+        let maxStreak = 0;
+        const MAX_SHOTS = 10;
+
+        // UI View State (Minimal HUD vs Full Panel)
+        let isPanelCollapsed = false;
+
+        // Ball Physics Parameters
+        const BALL_RADIUS = 0.22;
+        const BALL_START_POS = new THREE.Vector3(0, BALL_RADIUS, 11.0);
+        let ballVel = new THREE.Vector3();
+        let ballSpin = new THREE.Vector3();
+        let cameraMode = 0; // 0: Behind Ball, 1: Sideline, 2: Goal Cam, 3: Tactical
+
+        function createSoccerBallTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+            for (let i = 0; i < 30000; i++) {
+                ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
+            }
+
+            const centers = [
+                [512, 200], [240, 440], [784, 440],
+                [360, 780], [664, 780], [512, 512],
+                [100, 200], [924, 200], [100, 800], [924, 800]
+            ];
+
+            centers.forEach(([cx, cy]) => {
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 72 - 18) * Math.PI / 180;
+                    const px = cx + 84 * Math.cos(angle);
+                    const py = cy + 84 * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = '#10b981';
+                ctx.fill();
+
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 72 - 18) * Math.PI / 180;
+                    const px = cx + 76 * Math.cos(angle);
+                    const py = cy + 76 * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = '#090d16';
+                ctx.fill();
+            });
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 4;
+            centers.forEach(([cx, cy]) => {
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 72 - 18) * Math.PI / 180;
+                    const px = cx + 76 * Math.cos(angle);
+                    const py = cy + 76 * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            });
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.generateMipmaps = true;
+            return texture;
+        }
+
+        function createGrassTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            const stripeHeight = 64;
+            for (let y = 0; y < 1024; y += stripeHeight) {
+                ctx.fillStyle = (y / stripeHeight) % 2 === 0 ? '#15803d' : '#166534';
+                ctx.fillRect(0, y, 1024, stripeHeight);
+            }
+
+            ctx.fillStyle = 'rgba(74, 222, 128, 0.08)';
+            for (let i = 0; i < 60000; i++) {
+                ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 1.5, 3);
+            }
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+            for (let i = 0; i < 30000; i++) {
+                ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(2, 4);
+            return texture;
+        }
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060913);
+            scene.fog = new THREE.FogExp2(0x060913, 0.018);
+
+            camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 200);
+            updateCameraPosition();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xdcfce7, 0.75);
+            scene.add(ambientLight);
+
+            const flood1 = new THREE.DirectionalLight(0xffffff, 1.4);
+            flood1.position.set(16, 28, 22);
+            flood1.castShadow = true;
+            flood1.shadow.mapSize.width = 2048;
+            flood1.shadow.mapSize.height = 2048;
+            flood1.shadow.camera.near = 1;
+            flood1.shadow.camera.far = 70;
+            flood1.shadow.camera.left = -15;
+            flood1.shadow.camera.right = 15;
+            flood1.shadow.camera.top = 15;
+            flood1.shadow.camera.bottom = -15;
+            flood1.shadow.bias = -0.0005;
+            scene.add(flood1);
+
+            const flood2 = new THREE.DirectionalLight(0x38bdf8, 0.85);
+            flood2.position.set(-18, 26, 18);
+            scene.add(flood2);
+
+            const rimLight = new THREE.DirectionalLight(0x10b981, 0.7);
+            rimLight.position.set(0, 15, -12);
+            scene.add(rimLight);
+
+            createStadiumLightTowers();
+
+            const pitchGeo = new THREE.PlaneGeometry(60, 80);
+            const pitchMat = new THREE.MeshStandardMaterial({
+                map: createGrassTexture(),
+                roughness: 0.75,
+                metalness: 0.08
+            });
+            const pitch = new THREE.Mesh(pitchGeo, pitchMat);
+            pitch.rotation.x = -Math.PI / 2;
+            pitch.receiveShadow = true;
+            scene.add(pitch);
+
+            createPitchMarkings();
+            createGoalPosts();
+            createTargetMarkers();
+            createGoalkeeper();
+
+            const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 36, 36);
+            const ballMat = new THREE.MeshStandardMaterial({
+                map: createSoccerBallTexture(),
+                roughness: 0.32,
+                metalness: 0.1
+            });
+            ball = new THREE.Mesh(ballGeo, ballMat);
+            ball.castShadow = true;
+            ball.position.copy(BALL_START_POS);
+            scene.add(ball);
+
+            const shadowGeo = new THREE.CircleGeometry(BALL_RADIUS * 1.1, 24);
+            const shadowMat = new THREE.MeshBasicMaterial({
+                color: 0x030712,
+                transparent: true,
+                opacity: 0.55
+            });
+            ballShadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+            ballShadowMesh.rotation.x = -Math.PI / 2;
+            ballShadowMesh.position.set(BALL_START_POS.x, 0.015, BALL_START_POS.z);
+            scene.add(ballShadowMesh);
+
+            const lineGeo = new THREE.BufferGeometry();
+            const lineMat = new THREE.LineDashedMaterial({
+                color: 0x22c55e,
+                dashSize: 0.28,
+                gapSize: 0.14,
+                linewidth: 3,
+                opacity: 0.85,
+                transparent: true
+            });
+            trajectoryLine = new THREE.Line(lineGeo, lineMat);
+            scene.add(trajectoryLine);
+
+            window.addEventListener('resize', onWindowResize);
+            initGestureControls();
+        }
+
+        function createStadiumLightTowers() {
+            const towerGeo = new THREE.BoxGeometry(0.5, 20, 0.5);
+            const towerMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+
+            const lampHeadGeo = new THREE.BoxGeometry(3, 1.8, 1);
+            const lampGlowMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+            [ [-22, 10, 18], [22, 10, 18], [-22, 10, -10], [22, 10, -10] ].forEach(([tx, ty, tz]) => {
+                const tower = new THREE.Mesh(towerGeo, towerMat);
+                tower.position.set(tx, ty, tz);
+                scene.add(tower);
+
+                const lamp = new THREE.Mesh(lampHeadGeo, lampGlowMat);
+                lamp.position.set(tx, ty + 10, tz);
+                lamp.lookAt(0, 0, 0);
+                scene.add(lamp);
+            });
+
+            const boardGeo = new THREE.BoxGeometry(45, 1.2, 0.3);
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(0, 0, 1024, 64);
+            ctx.fillStyle = '#10b981';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText('⚽ GOAL STRIKE SIMULATOR • CINEMATIC SLOW-MO REPLAY • 3D MAGNUS ENGINE • ARCADE FREE KICK', 20, 42);
+
+            const boardTex = new THREE.CanvasTexture(canvas);
+            const boardMat = new THREE.MeshBasicMaterial({ map: boardTex });
+            const board = new THREE.Mesh(boardGeo, boardMat);
+            board.position.set(0, 0.6, -4.2);
+            scene.add(board);
+        }
+
+        function createPitchMarkings() {
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+
+            const goalLineGeo = new THREE.PlaneGeometry(30, 0.12);
+            const goalLine = new THREE.Mesh(goalLineGeo, lineMat);
+            goalLine.rotation.x = -Math.PI / 2;
+            goalLine.position.set(0, 0.01, -2.0);
+            scene.add(goalLine);
+
+            const spotGeo = new THREE.CircleGeometry(0.14, 24);
+            const spot = new THREE.Mesh(spotGeo, lineMat);
+            spot.rotation.x = -Math.PI / 2;
+            spot.position.set(0, 0.012, 11.0);
+            scene.add(spot);
+
+            const boxFrontGeo = new THREE.PlaneGeometry(16.5, 0.12);
+            const boxFront = new THREE.Mesh(boxFrontGeo, lineMat);
+            boxFront.rotation.x = -Math.PI / 2;
+            boxFront.position.set(0, 0.01, 3.5);
+            scene.add(boxFront);
+
+            const arcGeo = new THREE.RingGeometry(2.4, 2.52, 32, 1, 0, Math.PI);
+            const arc = new THREE.Mesh(arcGeo, lineMat);
+            arc.rotation.x = -Math.PI / 2;
+            arc.rotation.z = Math.PI / 2;
+            arc.position.set(0, 0.01, 3.5);
+            scene.add(arc);
+        }
+
+        function createGoalPosts() {
+            goalGroup = new THREE.Group();
+            
+            const postMat = new THREE.MeshStandardMaterial({
+                color: 0xf8fafc,
+                roughness: 0.15,
+                metalness: 0.85
+            });
+
+            const radius = 0.07;
+            const width = 7.32;
+            const height = 2.44;
+            const goalZ = -2.0;
+
+            const postLeftGeo = new THREE.CylinderGeometry(radius, radius, height, 20);
+            const postLeft = new THREE.Mesh(postLeftGeo, postMat);
+            postLeft.position.set(-width / 2, height / 2, goalZ);
+            postLeft.castShadow = true;
+            goalGroup.add(postLeft);
+
+            const postRight = postLeft.clone();
+            postRight.position.set(width / 2, height / 2, goalZ);
+            goalGroup.add(postRight);
+
+            const barGeo = new THREE.CylinderGeometry(radius, radius, width, 20);
+            const crossbar = new THREE.Mesh(barGeo, postMat);
+            crossbar.rotation.z = Math.PI / 2;
+            crossbar.position.set(0, height, goalZ);
+            crossbar.castShadow = true;
+            goalGroup.add(crossbar);
+
+            const stanchionMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.4 });
+            const backDepth = 1.8;
+
+            const stanchionL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, backDepth, 12), stanchionMat);
+            stanchionL.rotation.x = Math.PI / 2;
+            stanchionL.position.set(-width / 2, height, goalZ - backDepth / 2);
+            goalGroup.add(stanchionL);
+
+            const stanchionR = stanchionL.clone();
+            stanchionR.position.set(width / 2, height, goalZ - backDepth / 2);
+            goalGroup.add(stanchionR);
+
+            const netBackGeo = new THREE.PlaneGeometry(width, height, 28, 14);
+            const netMat = new THREE.MeshBasicMaterial({
+                color: 0xf1f5f9,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.32,
+                side: THREE.DoubleSide
+            });
+
+            netMesh = new THREE.Mesh(netBackGeo, netMat);
+            netMesh.position.set(0, height / 2, goalZ - backDepth);
+            goalGroup.add(netMesh);
+
+            const netTopGeo = new THREE.PlaneGeometry(width, backDepth, 28, 8);
+            const netTop = new THREE.Mesh(netTopGeo, netMat);
+            netTop.rotation.x = Math.PI / 2;
+            netTop.position.set(0, height, goalZ - backDepth / 2);
+            goalGroup.add(netTop);
+
+            const netSideGeo = new THREE.PlaneGeometry(backDepth, height, 8, 14);
+            const netSideL = new THREE.Mesh(netSideGeo, netMat);
+            netSideL.rotation.y = Math.PI / 2;
+            netSideL.position.set(-width / 2, height / 2, goalZ - backDepth / 2);
+            goalGroup.add(netSideL);
+
+            const netSideR = netSideL.clone();
+            netSideR.position.set(width / 2, height / 2, goalZ - backDepth / 2);
+            goalGroup.add(netSideR);
+
+            scene.add(goalGroup);
+        }
+
+        function createTargetMarkers() {
+            const targetsData = [
+                { id: 'TL', x: -3.05, y: 2.05, pts: 100, color: 0xeab308, name: 'TOP LEFT CORNER' },
+                { id: 'TR', x: 3.05, y: 2.05, pts: 100, color: 0xeab308, name: 'TOP RIGHT CORNER' },
+                { id: 'TC', x: 0.0, y: 2.15, pts: 150, color: 0xec4899, name: 'UPPER 90 CROSSBAR' },
+                { id: 'BL', x: -3.05, y: 0.55, pts: 50, color: 0x38bdf8, name: 'BOTTOM LEFT CORNER' },
+                { id: 'BR', x: 3.05, y: 0.55, pts: 50, color: 0x38bdf8, name: 'BOTTOM RIGHT CORNER' }
+            ];
+
+            targetsData.forEach(data => {
+                const group = new THREE.Group();
+                group.position.set(data.x, data.y, -1.96);
+
+                const ringGeo = new THREE.RingGeometry(0.38, 0.46, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: data.color,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                group.add(ring);
+
+                const midGeo = new THREE.RingGeometry(0.2, 0.3, 32);
+                const midMat = new THREE.MeshBasicMaterial({
+                    color: data.color,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.55
+                });
+                const mid = new THREE.Mesh(midGeo, midMat);
+                group.add(mid);
+
+                const coreGeo = new THREE.CircleGeometry(0.12, 24);
+                const coreMat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    side: THREE.DoubleSide
+                });
+                const core = new THREE.Mesh(coreGeo, coreMat);
+                group.add(core);
+
+                const crossGeo = new THREE.PlaneGeometry(0.9, 0.04);
+                const crossMat = new THREE.MeshBasicMaterial({ color: data.color, transparent: true, opacity: 0.7 });
+                const crossH = new THREE.Mesh(crossGeo, crossMat);
+                const crossV = new THREE.Mesh(crossGeo, crossMat);
+                crossV.rotation.z = Math.PI / 2;
+                group.add(crossH);
+                group.add(crossV);
+
+                group.userData = { id: data.id, pts: data.pts, name: data.name, active: true, color: data.color };
+                scene.add(group);
+                targetMarkers.push(group);
+            });
+        }
+
+        function createGoalkeeper() {
+            keeperGroup = new THREE.Group();
+            keeperGroup.position.set(0, 0, -1.8);
+
+            const jerseyMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.4 });
+            const shortsMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.6 });
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xfbcfe8, roughness: 0.6 });
+            const gloveMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.25, metalness: 0.2 });
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 20), skinMat);
+            head.position.y = 1.72;
+            keeperGroup.add(head);
+
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.68, 0.26), jerseyMat);
+            torso.position.y = 1.2;
+            torso.castShadow = true;
+            keeperGroup.add(torso);
+
+            const shorts = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.35, 0.28), shortsMat);
+            shorts.position.y = 0.85;
+            keeperGroup.add(shorts);
+
+            const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.6, 12), jerseyMat);
+            armL.position.set(-0.35, 1.25, 0);
+            armL.rotation.z = Math.PI / 5;
+            keeperGroup.add(armL);
+
+            const gloveL = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 14), gloveMat);
+            gloveL.position.set(-0.52, 0.98, 0.05);
+            keeperGroup.add(gloveL);
+
+            const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.6, 12), jerseyMat);
+            armR.position.set(0.35, 1.25, 0);
+            armR.rotation.z = -Math.PI / 5;
+            keeperGroup.add(armR);
+
+            const gloveR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 14), gloveMat);
+            gloveR.position.set(0.52, 0.98, 0.05);
+            keeperGroup.add(gloveR);
+
+            const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.72, 12), skinMat);
+            legL.position.set(-0.16, 0.38, 0);
+            keeperGroup.add(legL);
+
+            const legR = legL.clone();
+            legR.position.set(0.16, 0.38, 0);
+            keeperGroup.add(legR);
+
+            scene.add(keeperGroup);
+        }
+
+        /* =========================================================================
+           3. MAGNUS CURVE ENGINE & PHYSICS TRAJECTORY
+           ========================================================================= */
+        function calculateTrajectoryPoints(aimDeg, powerVal, curveVal, liftDeg) {
+            const points = [];
+
+            const aimRad = (aimDeg * Math.PI) / 180;
+            const liftRad = (liftDeg * Math.PI) / 180;
+
+            const speed = 15.0 + (powerVal / 100) * 21.0;
+
+            let vx = speed * Math.sin(aimRad) * Math.cos(liftRad);
+            let vy = speed * Math.sin(liftRad);
+            let vz = -speed * Math.cos(aimRad) * Math.cos(liftRad);
+
+            const spinY = -curveVal * 1.9;
+            const spinX = 4.0;
+
+            let px = BALL_START_POS.x;
+            let py = BALL_START_POS.y;
+            let pz = BALL_START_POS.z;
+
+            const dt = 0.016;
+            const g = -9.81;
+            const Cd = 0.24;
+            const Cm = 0.0019;
+
+            for (let step = 0; step < 110; step++) {
+                points.push(new THREE.Vector3(px, py, pz));
+
+                const vMag = Math.sqrt(vx * vx + vy * vy + vz * vz);
+
+                const dragX = -Cd * 0.01 * vMag * vx;
+                const dragY = -Cd * 0.01 * vMag * vy;
+                const dragZ = -Cd * 0.01 * vMag * vz;
+
+                const magnusX = Cm * (spinY * vz);
+                const magnusY = Cm * (-spinX * vz);
+
+                const ax = dragX + magnusX;
+                const ay = g + dragY + magnusY;
+                const az = dragZ;
+
+                vx += ax * dt;
+                vy += ay * dt;
+                vz += az * dt;
+
+                px += vx * dt;
+                py += vy * dt;
+                pz += vz * dt;
+
+                if (py < BALL_RADIUS || pz < -3.2) break;
+            }
+
+            return {
+                points,
+                speedKmh: Math.round(speed * 3.6),
+                rpm: Math.round(Math.abs(curveVal) * 48)
+            };
+        }
+
+        function updateTrajectoryLine() {
+            if (currentState !== GAME_STATE.IDLE) return;
+
+            const aim = parseFloat(document.getElementById('slider-aim').value);
+            const power = parseFloat(document.getElementById('slider-power').value);
+            const curve = parseFloat(document.getElementById('slider-curve').value);
+            const lift = parseFloat(document.getElementById('slider-lift').value);
+
+            const { points, speedKmh, rpm } = calculateTrajectoryPoints(aim, power, curve, lift);
+
+            trajectoryLine.geometry.dispose();
+            trajectoryLine.geometry = new THREE.BufferGeometry().setFromPoints(points);
+            trajectoryLine.computeLineDistances();
+
+            document.getElementById('tele-speed').innerText = `${speedKmh} km/h`;
+            document.getElementById('tele-curve').innerText = `${rpm} RPM`;
+
+            const isTopCorner = Math.abs(aim) > 13 && lift > 18;
+            const xG = isTopCorner ? (0.24 + (power / 250)).toFixed(2) : Math.min(0.82, 0.35 + (power / 200)).toFixed(2);
+            document.getElementById('tele-xg').innerText = xG;
+        }
+
+        /* =========================================================================
+           4. PARTICLE EFFECTS ENGINE
+           ========================================================================= */
+        function spawnBallTrailParticle(pos) {
+            const pGeo = new THREE.SphereGeometry(0.065, 8, 8);
+            const pMat = new THREE.MeshBasicMaterial({
+                color: Math.abs(ballSpin.y) > 10 ? 0x38bdf8 : 0x22c55e,
+                transparent: true,
+                opacity: 0.85
+            });
+            const p = new THREE.Mesh(pGeo, pMat);
+            p.position.copy(pos);
+            scene.add(p);
+
+            ballTrailParticles.push({
+                mesh: p,
+                life: 1.0,
+                decay: 0.05
+            });
+        }
+
+        function spawnTargetShatterParticles(pos, color) {
+            const fragmentGeo = new THREE.BoxGeometry(0.09, 0.09, 0.09);
+            const fragmentMat = new THREE.MeshBasicMaterial({ color: color });
+
+            for (let i = 0; i < 26; i++) {
+                const frag = new THREE.Mesh(fragmentGeo, fragmentMat);
+                frag.position.copy(pos);
+                
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 8,
+                    (Math.random() - 0.2) * 7,
+                    (Math.random() - 0.5) * 6
+                );
+
+                scene.add(frag);
+                particles.push({
+                    mesh: frag,
+                    vel: vel,
+                    life: 1.0,
+                    decay: 0.025
+                });
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = ballTrailParticles.length - 1; i >= 0; i--) {
+                const pt = ballTrailParticles[i];
+                pt.life -= pt.decay;
+                pt.mesh.material.opacity = pt.life;
+                pt.mesh.scale.multiplyScalar(0.96);
+
+                if (pt.life <= 0) {
+                    scene.remove(pt.mesh);
+                    pt.mesh.geometry.dispose();
+                    pt.mesh.material.dispose();
+                    ballTrailParticles.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= p.decay;
+                p.vel.y -= 9.81 * dt;
+                p.mesh.position.addScaledVector(p.vel, dt);
+                p.mesh.rotation.x += 0.2;
+                p.mesh.rotation.y += 0.15;
+                p.mesh.scale.multiplyScalar(0.98);
+
+                if (p.life <= 0 || p.mesh.position.y < 0) {
+                    scene.remove(p.mesh);
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        /* =========================================================================
+           5. SHOT EXECUTION, TRAJECTORY RECORDING & COLLISION PHYSICS
+           ========================================================================= */
+        function triggerShot() {
+            if (currentState !== GAME_STATE.IDLE) return;
+
+            currentState = GAME_STATE.IN_FLIGHT;
+            shotsTaken++;
+            document.getElementById('ui-shots').innerText = `${shotsTaken}/${MAX_SHOTS}`;
+            document.getElementById('btn-shoot').classList.add('opacity-50', 'pointer-events-none');
+
+            // Reset trajectory flight recording
+            recordedFlightFrames = [];
+            recordedFlightFrames.push({
+                pos: BALL_START_POS.clone(),
+                rot: ball.rotation.clone(),
+                keeperPos: keeperGroup ? keeperGroup.position.clone() : new THREE.Vector3(),
+                keeperRot: keeperGroup ? keeperGroup.rotation.clone() : new THREE.Euler()
+            });
+
+            const aim = parseFloat(document.getElementById('slider-aim').value);
+            const power = parseFloat(document.getElementById('slider-power').value);
+            const curve = parseFloat(document.getElementById('slider-curve').value);
+            const lift = parseFloat(document.getElementById('slider-lift').value);
+
+            sound.playKick(power);
+
+            const speed = 15.0 + (power / 100) * 21.0;
+            const aimRad = (aim * Math.PI) / 180;
+            const liftRad = (lift * Math.PI) / 180;
+
+            ballVel.set(
+                speed * Math.sin(aimRad) * Math.cos(liftRad),
+                speed * Math.sin(liftRad),
+                -speed * Math.cos(aimRad) * Math.cos(liftRad)
+            );
+
+            ballSpin.set(4.0, -curve * 1.9, 0);
+            trajectoryLine.visible = false;
+
+            const predictedLand = predictGoalIntersection(aim, power, curve, lift);
+            animateGoalkeeperDive(predictedLand, power);
+        }
+
+        function predictGoalIntersection(aim, power, curve, lift) {
+            const { points } = calculateTrajectoryPoints(aim, power, curve, lift);
+            let targetPoint = points[points.length - 1];
+            for (let p of points) {
+                if (p.z <= -2.0) {
+                    targetPoint = p;
+                    break;
+                }
+            }
+            return targetPoint;
+        }
+
+        function animateGoalkeeperDive(targetPoint, power) {
+            if (!keeperGroup) return;
+
+            const diveReachX = THREE.MathUtils.clamp(targetPoint.x * 0.88, -3.2, 3.2);
+            const diveReachY = THREE.MathUtils.clamp(targetPoint.y, 0.4, 2.3);
+
+            const isHardCorner = Math.abs(targetPoint.x) > 2.7 && targetPoint.y > 1.8;
+            const delay = isHardCorner ? 0.22 : 0.12;
+
+            gsap.to(keeperGroup.position, {
+                x: diveReachX,
+                y: diveReachY,
+                duration: 0.52,
+                delay: delay,
+                ease: 'power2.out'
+            });
+
+            const rotZ = targetPoint.x > 0 ? -Math.PI / 4 : Math.PI / 4;
+            gsap.to(keeperGroup.rotation, {
+                z: rotZ,
+                duration: 0.48,
+                delay: delay,
+                ease: 'power2.out'
+            });
+        }
+
+        function updatePhysics(dt) {
+            if (currentState !== GAME_STATE.IN_FLIGHT) return;
+
+            const Cd = 0.24;
+            const Cm = 0.0019;
+            const vMag = ballVel.length();
+
+            const dragX = -Cd * 0.01 * vMag * ballVel.x;
+            const dragY = -Cd * 0.01 * vMag * ballVel.y;
+            const dragZ = -Cd * 0.01 * vMag * ballVel.z;
+
+            const magnusX = Cm * (ballSpin.y * ballVel.z);
+            const magnusY = Cm * (-ballSpin.x * ballVel.z);
+
+            ballVel.x += (dragX + magnusX) * dt * 60;
+            ballVel.y += (-9.81 + dragY + magnusY) * dt;
+            ballVel.z += dragZ * dt * 60;
+
+            ball.position.addScaledVector(ballVel, dt);
+
+            ballShadowMesh.position.x = ball.position.x;
+            ballShadowMesh.position.z = ball.position.z;
+            const shadowScale = Math.max(0.2, 1.0 - (ball.position.y / 6.0));
+            ballShadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+            ballShadowMesh.material.opacity = Math.max(0.1, 0.55 - (ball.position.y / 5.0));
+
+            ball.rotation.x += ballVel.z * dt * 2.4;
+            ball.rotation.y += ballSpin.y * dt * 1.5;
+
+            // Record trajectory point for cinematic slow-mo replay
+            recordedFlightFrames.push({
+                pos: ball.position.clone(),
+                rot: ball.rotation.clone(),
+                keeperPos: keeperGroup ? keeperGroup.position.clone() : new THREE.Vector3(),
+                keeperRot: keeperGroup ? keeperGroup.rotation.clone() : new THREE.Euler()
+            });
+
+            spawnBallTrailParticle(ball.position);
+
+            if (ball.position.y <= BALL_RADIUS) {
+                ball.position.y = BALL_RADIUS;
+                ballVel.y *= -0.52;
+                ballVel.x *= 0.75;
+                ballVel.z *= 0.75;
+
+                if (ballVel.length() < 1.2 && Math.abs(ball.position.z - (-2.0)) > 1.5) {
+                    processShotResult('MISS', 'Ground Shot Stopped', 0);
+                    return;
+                }
+            }
+
+            const keeperPos = new THREE.Vector3(keeperGroup.position.x, keeperGroup.position.y, -1.9);
+            const distToKeeper = ball.position.distanceTo(keeperPos);
+            if (distToKeeper < 0.72) {
+                sound.playGloveSave();
+                ballVel.x *= -0.3;
+                ballVel.y *= 0.4;
+                ballVel.z = Math.abs(ballVel.z) * 0.5;
+                processShotResult('SAVED', 'SAVED BY GOALKEEPER!', 0);
+                return;
+            }
+
+            checkPostCollisions();
+
+            if (ball.position.z <= -2.0 && ball.position.z >= -2.4) {
+                if (Math.abs(ball.position.x) < 3.66 && ball.position.y > 0.15 && ball.position.y < 2.44) {
+                    checkTargetHits(ball.position.x, ball.position.y);
+                } else if (Math.abs(ball.position.x) >= 3.66 || ball.position.y >= 2.44) {
+                    processShotResult('MISS', 'OFF TARGET / WIDE', 0);
+                }
+            }
+
+            if (ball.position.z < -3.2) {
+                ballVel.multiplyScalar(0.2);
+            }
+        }
+
+        function checkPostCollisions() {
+            const bx = ball.position.x;
+            const by = ball.position.y;
+            const bz = ball.position.z;
+
+            if (Math.abs(bz - (-2.0)) < 0.28) {
+                if ((Math.abs(bx - 3.66) < 0.26 || Math.abs(bx + 3.66) < 0.26) && by <= 2.5) {
+                    sound.playPostHit();
+                    ballVel.z = Math.abs(ballVel.z) * 0.65;
+                    ballVel.x *= -0.5;
+                    processShotResult('POST', 'CLANG! HIT THE POST!', 0);
+                }
+                else if (Math.abs(by - 2.44) < 0.26 && Math.abs(bx) <= 3.7) {
+                    sound.playPostHit();
+                    ballVel.y = -Math.abs(ballVel.y) * 0.65;
+                    ballVel.z = Math.abs(ballVel.z) * 0.65;
+                    processShotResult('POST', 'CLANG! HIT THE CROSSBAR!', 0);
+                }
+            }
+        }
+
+        function checkTargetHits(gx, gy) {
+            let hitTarget = null;
+
+            targetMarkers.forEach(t => {
+                if (!t.userData.active) return;
+                const dist = Math.hypot(gx - t.position.x, gy - t.position.y);
+                if (dist < 0.62) {
+                    hitTarget = t;
+                }
+            });
+
+            if (hitTarget) {
+                targetsHitCount++;
+                const pts = hitTarget.userData.pts;
+                const name = hitTarget.userData.name;
+
+                spawnTargetShatterParticles(hitTarget.position, hitTarget.userData.color);
+                sound.playTargetShatter();
+                sound.playGoalCheer();
+
+                gsap.to(hitTarget.scale, {
+                    x: 1.6, y: 1.6, z: 1.6,
+                    duration: 0.15,
+                    yoyo: true,
+                    repeat: 1
+                });
+
+                processShotResult('TARGET', `BULLSEYE! ${name} +${pts}`, pts);
+            } else {
+                sound.playGoalCheer();
+                processShotResult('GOAL', 'GOAL! BEAUTIFUL STRIKE! +30', 30);
+            }
+        }
+
+        function processShotResult(type, title, pts) {
+            if (currentState === GAME_STATE.RESULT || currentState === GAME_STATE.REPLAY) return;
+            currentState = GAME_STATE.RESULT;
+
+            const isGoalOrTarget = (type === 'GOAL' || type === 'TARGET');
+
+            if (isGoalOrTarget) {
+                score += pts;
+                streak++;
+                maxStreak = Math.max(maxStreak, streak);
+            } else {
+                streak = 0;
+            }
+
+            document.getElementById('ui-score').innerText = score;
+            document.getElementById('ui-streak').innerText = streak;
+
+            const accuracy = Math.round(((shotsTaken - (shotsTaken - (targetsHitCount + (score > 0 ? 1 : 0)))) / shotsTaken) * 100) || 0;
+            document.getElementById('ui-accuracy').innerText = `${accuracy}%`;
+
+            const banner = document.getElementById('notification-banner');
+            const card = document.getElementById('banner-card');
+            const titleEl = document.getElementById('banner-title');
+            const subEl = document.getElementById('banner-subtitle');
+            const detailEl = document.getElementById('banner-detail');
+
+            titleEl.innerText = title;
+            subEl.innerText = type === 'TARGET' ? '🎯 DIRECT BULLSEYE HIT' : (type === 'GOAL' ? '⚽ GOAL' : '⚠️ MATCH EVENT');
+            detailEl.innerText = `Shot Speed: ${document.getElementById('tele-speed').innerText} • Current Streak: ${streak}`;
+
+            if (isGoalOrTarget) {
+                card.className = 'glass-panel px-7 sm:px-10 py-4 sm:py-5 rounded-3xl border border-green-500/50 glow-box-green animate-pop';
+                subEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-green-400 block mb-1';
+            } else if (type === 'POST') {
+                card.className = 'glass-panel px-7 sm:px-10 py-4 sm:py-5 rounded-3xl border border-yellow-500/50 glow-box-cyan animate-pop';
+                subEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-yellow-400 block mb-1';
+            } else {
+                card.className = 'glass-panel px-7 sm:px-10 py-4 sm:py-5 rounded-3xl border border-red-500/50 glow-box-red animate-pop';
+                subEl.className = 'text-xs sm:text-sm font-bold uppercase tracking-widest text-red-400 block mb-1';
+            }
+
+            banner.classList.remove('hidden');
+
+            // If it's a Goal or Bullseye Target, automatically trigger Cinematic Slow-Mo Replay!
+            if (isGoalOrTarget && recordedFlightFrames.length > 8) {
+                setTimeout(() => {
+                    banner.classList.add('hidden');
+                    startCinematicReplay();
+                }, 1400);
+            } else {
+                setTimeout(() => {
+                    banner.classList.add('hidden');
+                    if (shotsTaken >= MAX_SHOTS) {
+                        showFinalSummary();
+                    } else {
+                        resetBallPosition();
+                    }
+                }, 2200);
+            }
+        }
+
+        /* =========================================================================
+           6. CINEMATIC SLOW-MO REPLAY ENGINE
+           ========================================================================= */
+        function startCinematicReplay() {
+            if (recordedFlightFrames.length < 5) {
+                resetBallPosition();
+                return;
+            }
+
+            currentState = GAME_STATE.REPLAY;
+            isReplaying = true;
+            replayFrameIndex = 0;
+
+            // Display TV Broadcast Replay Banner
+            const replayBadge = document.getElementById('replay-badge');
+            document.getElementById('replay-telemetry').innerText = `Trajectory Replay • ${document.getElementById('tele-speed').innerText} • ${document.getElementById('tele-curve').innerText}`;
+            replayBadge.classList.remove('hidden');
+
+            // Position Camera at a dynamic cinematic tracking angle
+            // Low chase / sideline cut angle following the ball
+            const firstFrame = recordedFlightFrames[0];
+            camera.position.set(firstFrame.pos.x + 2.8, 1.3, firstFrame.pos.z + 3.2);
+            camera.lookAt(firstFrame.pos.x, 1.2, -2.0);
+        }
+
+        function updateReplay(dt) {
+            if (!isReplaying || recordedFlightFrames.length === 0) return;
+
+            // Slow-motion frame interpolation
+            replayFrameIndex += (dt / 0.016) * replaySpeedScale;
+
+            const currIndex = Math.floor(replayFrameIndex);
+            const nextIndex = Math.min(currIndex + 1, recordedFlightFrames.length - 1);
+            const alpha = replayFrameIndex - currIndex;
+
+            if (currIndex >= recordedFlightFrames.length - 1) {
+                // Replay complete
+                endCinematicReplay();
+                return;
+            }
+
+            const f0 = recordedFlightFrames[currIndex];
+            const f1 = recordedFlightFrames[nextIndex];
+
+            // Smoothly interpolate ball position & rotation
+            ball.position.lerpVectors(f0.pos, f1.pos, alpha);
+            ball.rotation.x = THREE.MathUtils.lerp(f0.rot.x, f1.rot.x, alpha);
+            ball.rotation.y = THREE.MathUtils.lerp(f0.rot.y, f1.rot.y, alpha);
+
+            // Update ball shadow
+            ballShadowMesh.position.x = ball.position.x;
+            ballShadowMesh.position.z = ball.position.z;
+            const shadowScale = Math.max(0.2, 1.0 - (ball.position.y / 6.0));
+            ballShadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+            ballShadowMesh.material.opacity = Math.max(0.1, 0.5 - (ball.position.y / 5.0));
+
+            // Interpolate goalkeeper dive in synced slow-mo
+            if (keeperGroup && f0.keeperPos && f1.keeperPos) {
+                keeperGroup.position.lerpVectors(f0.keeperPos, f1.keeperPos, alpha);
+                keeperGroup.rotation.z = THREE.MathUtils.lerp(f0.keeperRot.z, f1.keeperRot.z, alpha);
+            }
+
+            // Cinematic Tracking Camera: Follows ball with smooth low-angle orbit
+            const targetCamPos = new THREE.Vector3(
+                ball.position.x * 0.6 + 2.4,
+                Math.max(1.1, ball.position.y * 0.7 + 0.6),
+                ball.position.z + 3.4
+            );
+            camera.position.lerp(targetCamPos, 0.08);
+            camera.lookAt(ball.position.x * 0.5, Math.max(0.9, ball.position.y), -2.0);
+
+            // Spawn slow-motion trailing ribbon particles
+            if (Math.random() < 0.4) {
+                spawnBallTrailParticle(ball.position);
+            }
+        }
+
+        function endCinematicReplay() {
+            isReplaying = false;
+            document.getElementById('replay-badge').classList.add('hidden');
+
+            // Smooth camera transition back to active kickoff camera view
+            updateCameraPosition();
+
+            if (shotsTaken >= MAX_SHOTS) {
+                showFinalSummary();
+            } else {
+                resetBallPosition();
+            }
+        }
+
+        /* =========================================================================
+           7. ADAPTABLE DASHBOARD CONTROL PANEL (Full vs Minimal HUD)
+           ========================================================================= */
+        function toggleControlPanel() {
+            const panel = document.getElementById('collapsible-controls');
+            const icon = document.getElementById('toggle-panel-icon');
+            const text = document.getElementById('toggle-panel-text');
+
+            isPanelCollapsed = !isPanelCollapsed;
+
+            if (isPanelCollapsed) {
+                panel.classList.add('collapsed');
+                icon.className = 'fa-solid fa-sliders text-emerald-400';
+                text.innerText = 'Full Controls';
+                // Show hint reminding user they can swipe directly
+                document.getElementById('swipe-hint').style.display = 'flex';
+            } else {
+                panel.classList.remove('collapsed');
+                icon.className = 'fa-solid fa-compress text-cyan-400';
+                text.innerText = 'Minimal HUD';
+            }
+        }
+
+        function resetBallPosition() {
+            currentState = GAME_STATE.IDLE;
+            ball.position.copy(BALL_START_POS);
+            ballVel.set(0, 0, 0);
+            ballSpin.set(0, 0, 0);
+
+            gsap.to(keeperGroup.position, { x: 0, y: 0, z: -1.8, duration: 0.45, ease: 'power2.out' });
+            gsap.to(keeperGroup.rotation, { z: 0, duration: 0.45, ease: 'power2.out' });
+
+            trajectoryLine.visible = true;
+            updateTrajectoryLine();
+
+            document.getElementById('btn-shoot').classList.remove('opacity-50', 'pointer-events-none');
+        }
+
+        function showFinalSummary() {
+            document.getElementById('sum-score').innerText = score;
+            document.getElementById('sum-targets').innerText = targetsHitCount;
+            const finalAcc = Math.round(((targetsHitCount + (score > 100 ? 3 : 1)) / MAX_SHOTS) * 100);
+            document.getElementById('sum-accuracy').innerText = `${Math.min(100, finalAcc)}%`;
+            document.getElementById('sum-streak').innerText = maxStreak;
+
+            const ratingEl = document.getElementById('sum-rating');
+            if (score >= 400) {
+                ratingEl.innerText = 'Legendary Ball Striker! Beckham & Roberto Carlos would be proud!';
+            } else if (score >= 200) {
+                ratingEl.innerText = 'Clinical Finisher! Superb trajectory bending & accuracy.';
+            } else {
+                ratingEl.innerText = 'Good Effort! Practice your curve spin to fool the keeper!';
+            }
+
+            document.getElementById('modal-summary').classList.remove('hidden');
+            sound.playWhistle();
+        }
+
+        function restartMatch() {
+            score = 0;
+            shotsTaken = 0;
+            streak = 0;
+            targetsHitCount = 0;
+            maxStreak = 0;
+
+            document.getElementById('ui-score').innerText = '0';
+            document.getElementById('ui-shots').innerText = `0/${MAX_SHOTS}`;
+            document.getElementById('ui-streak').innerText = '0';
+            document.getElementById('ui-accuracy').innerText = '0%';
+
+            document.getElementById('modal-summary').classList.add('hidden');
+            resetBallPosition();
+        }
+
+        /* =========================================================================
+           8. DYNAMIC CAMERA VIEWS & RESIZE
+           ========================================================================= */
+        function updateCameraPosition() {
+            const camName = document.getElementById('cam-name');
+            if (cameraMode === 0) {
+                camera.position.set(0, 1.65, 14.6);
+                camera.lookAt(0, 1.25, -2.0);
+                if (camName) camName.innerText = 'Behind Ball';
+            } else if (cameraMode === 1) {
+                camera.position.set(13.5, 6.2, 7.5);
+                camera.lookAt(0, 1.2, 1.0);
+                if (camName) camName.innerText = 'Sideline Cam';
+            } else if (cameraMode === 2) {
+                camera.position.set(0, 2.3, -4.6);
+                camera.lookAt(0, 0.9, 11.0);
+                if (camName) camName.innerText = 'Goal Cam';
+            } else {
+                camera.position.set(0, 15.0, 5.0);
+                camera.lookAt(0, 0, 1.0);
+                if (camName) camName.innerText = 'Tactical Top';
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* =========================================================================
+           9. SWIPE / FLICK GESTURE MECHANICS ON CANVAS
+           ========================================================================= */
+        function initGestureControls() {
+            let isDragging = false;
+            let startX = 0, startY = 0;
+            let endX = 0, endY = 0;
+
+            const gesturePath = document.getElementById('gesture-path');
+            const gestureStart = document.getElementById('gesture-start');
+            const gestureEnd = document.getElementById('gesture-end');
+
+            function onPointerDown(e) {
+                if (currentState !== GAME_STATE.IDLE) return;
+                if (e.target.closest('button') || e.target.closest('input') || e.target.closest('#modal-help') || e.target.closest('#modal-summary') || e.target.closest('#replay-badge')) {
+                    return;
+                }
+
+                isDragging = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                startX = clientX;
+                startY = clientY;
+                endX = clientX;
+                endY = clientY;
+
+                gestureStart.setAttribute('cx', startX);
+                gestureStart.setAttribute('cy', startY);
+                gestureEnd.setAttribute('cx', startX);
+                gestureEnd.setAttribute('cy', startY);
+            }
+
+            function onPointerMove(e) {
+                if (!isDragging) return;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                endX = clientX;
+                endY = clientY;
+
+                const dx = endX - startX;
+                const dy = endY - startY;
+
+                const midX = (startX + endX) / 2 + (dx * 0.3);
+                const midY = (startY + endY) / 2;
+
+                gesturePath.setAttribute('d', `M ${startX} ${startY} Q ${midX} ${midY} ${endX} ${endY}`);
+                gestureEnd.setAttribute('cx', endX);
+                gestureEnd.setAttribute('cy', endY);
+            }
+
+            function onPointerUp(e) {
+                if (!isDragging) return;
+                isDragging = false;
+
+                gesturePath.setAttribute('d', '');
+                gestureStart.setAttribute('cx', -100);
+                gestureEnd.setAttribute('cx', -100);
+
+                const dx = endX - startX;
+                const dy = startY - endY;
+
+                if (dy > 35) {
+                    const aimAngle = THREE.MathUtils.clamp((dx / window.innerWidth) * 75, -30, 30);
+                    const powerVal = THREE.MathUtils.clamp(45 + (dy / window.innerHeight) * 110, 45, 100);
+                    const curveVal = THREE.MathUtils.clamp((dx / 12), -28, 28);
+                    const liftVal = THREE.MathUtils.clamp(14 + (dy / 25), 10, 38);
+
+                    document.getElementById('slider-aim').value = Math.round(aimAngle);
+                    document.getElementById('val-aim').innerText = `${Math.round(aimAngle)}°`;
+
+                    document.getElementById('slider-power').value = Math.round(powerVal);
+                    document.getElementById('val-power').innerText = `${Math.round(powerVal)}%`;
+
+                    document.getElementById('slider-curve').value = Math.round(curveVal);
+                    document.getElementById('val-curve').innerText = `${Math.round(curveVal)}`;
+
+                    document.getElementById('slider-lift').value = Math.round(liftVal);
+                    document.getElementById('val-lift').innerText = `${Math.round(liftVal)}°`;
+
+                    updateTrajectoryLine();
+                    triggerShot();
+                }
+            }
+
+            window.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+
+            window.addEventListener('touchstart', onPointerDown, { passive: true });
+            window.addEventListener('touchmove', onPointerMove, { passive: true });
+            window.addEventListener('touchend', onPointerUp);
+        }
+
+        /* =========================================================================
+           10. EVENT LISTENERS & UI WIRING
+           ========================================================================= */
+        document.addEventListener('DOMContentLoaded', () => {
+            initScene();
+            updateTrajectoryLine();
+
+            // Slider Listeners
+            ['aim', 'power', 'curve', 'lift'].forEach(id => {
+                const slider = document.getElementById(`slider-${id}`);
+                const valLabel = document.getElementById(`val-${id}`);
+                
+                slider.addEventListener('input', (e) => {
+                    const unit = id === 'power' ? '%' : (id === 'aim' || id === 'lift' ? '°' : '');
+                    valLabel.innerText = `${e.target.value}${unit}`;
+                    updateTrajectoryLine();
+                });
+            });
+
+            // Presets
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const { aim, power, curve, lift } = btn.dataset;
+                    
+                    document.getElementById('slider-aim').value = aim;
+                    document.getElementById('val-aim').innerText = `${aim}°`;
+
+                    document.getElementById('slider-power').value = power;
+                    document.getElementById('val-power').innerText = `${power}%`;
+
+                    document.getElementById('slider-curve').value = curve;
+                    document.getElementById('val-curve').innerText = curve;
+
+                    document.getElementById('slider-lift').value = lift;
+                    document.getElementById('val-lift').innerText = `${lift}°`;
+
+                    updateTrajectoryLine();
+                });
+            });
+
+            // Random Shot
+            document.getElementById('btn-random').addEventListener('click', () => {
+                const aim = Math.floor(Math.random() * 50) - 25;
+                const power = Math.floor(Math.random() * 45) + 55;
+                const curve = Math.floor(Math.random() * 50) - 25;
+                const lift = Math.floor(Math.random() * 26) + 12;
+
+                document.getElementById('slider-aim').value = aim;
+                document.getElementById('val-aim').innerText = `${aim}°`;
+
+                document.getElementById('slider-power').value = power;
+                document.getElementById('val-power').innerText = `${power}%`;
+
+                document.getElementById('slider-curve').value = curve;
+                document.getElementById('val-curve').innerText = curve;
+
+                document.getElementById('slider-lift').value = lift;
+                document.getElementById('val-lift').innerText = `${lift}°`;
+
+                updateTrajectoryLine();
+            });
+
+            // Shoot & Reset Action Buttons
+            document.getElementById('btn-shoot').addEventListener('click', triggerShot);
+            document.getElementById('btn-reset').addEventListener('click', resetBallPosition);
+            document.getElementById('btn-restart').addEventListener('click', restartMatch);
+
+            // Collapsible Panel Toggle Button
+            document.getElementById('btn-panel-toggle').addEventListener('click', toggleControlPanel);
+
+            // Manual Replay Trigger & Skip Replay Buttons
+            document.getElementById('btn-manual-replay').addEventListener('click', () => {
+                if (recordedFlightFrames.length > 5 && currentState === GAME_STATE.IDLE) {
+                    startCinematicReplay();
+                }
+            });
+            document.getElementById('btn-skip-replay').addEventListener('click', endCinematicReplay);
+
+            // Spacebar Shot & ESC Skip Replay Shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    if (currentState === GAME_STATE.IDLE) triggerShot();
+                } else if (e.code === 'Escape') {
+                    if (isReplaying) endCinematicReplay();
+                }
+            });
+
+            // Camera Toggle
+            document.getElementById('btn-cam-toggle').addEventListener('click', () => {
+                cameraMode = (cameraMode + 1) % 4;
+                updateCameraPosition();
+            });
+
+            // Audio Mute Toggle
+            document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+                sound.muted = !sound.muted;
+                const icon = document.getElementById('audio-icon');
+                if (sound.muted) {
+                    icon.className = 'fa-solid fa-volume-xmark text-sm sm:text-base text-gray-400';
+                } else {
+                    icon.className = 'fa-solid fa-volume-high text-sm sm:text-base text-green-400';
+                }
+            });
+
+            // Help Modal Handlers
+            const modalHelp = document.getElementById('modal-help');
+            document.getElementById('btn-help-toggle').addEventListener('click', () => {
+                modalHelp.classList.remove('hidden');
+            });
+            document.getElementById('btn-close-help').addEventListener('click', () => {
+                modalHelp.classList.add('hidden');
+            });
+            document.getElementById('btn-help-start').addEventListener('click', () => {
+                modalHelp.classList.add('hidden');
+            });
+
+            // Dismiss hint banner
+            document.getElementById('btn-dismiss-hint').addEventListener('click', () => {
+                document.getElementById('swipe-hint').style.display = 'none';
+            });
+
+            /* =========================================================================
+               11. MAIN ANIMATION & RENDERING LOOP
+               ========================================================================= */
+            let clock = new THREE.Clock();
+            function animate() {
+                requestAnimationFrame(animate);
+                const dt = Math.min(clock.getDelta(), 0.08);
+
+                if (isReplaying) {
+                    updateReplay(dt);
+                } else {
+                    updatePhysics(dt);
+                }
+
+                updateParticles(dt);
+
+                targetMarkers.forEach((t, index) => {
+                    t.rotation.z += 0.018 * (index % 2 === 0 ? 1 : -1);
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+        });
+    </script>
+</body>
+</html>
